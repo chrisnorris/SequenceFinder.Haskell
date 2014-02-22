@@ -8,6 +8,7 @@ import Control.Monad.Par
 import Control.DeepSeq
 import Control.Applicative
 import Data.Int
+
 deep ::  NFData b => b -> b
 deep a = deepseq a a
 data Rep a = Null | Node a (Rep a) (Rep a)
@@ -34,11 +35,9 @@ searchTarget ::  [Word8]
 searchTarget = [66,65,65,65,65,65,66,65,67,67,67,68,67,67]
 
 main = do
-    (chunkSizeString:_) <- getArgs
+    ( chunkSizeString : sourceFile : _ ) <- getArgs
     let chunkSize = read chunkSizeString ::  Int64
-    input <- LB.readFile "/Users/OdeMoor/Documents/text2.txt"
-    --let chunks = chunk input
-    --let (as,bs) = LB.splitAt (200000) input
+    input <- LB.readFile sourceFile
     b <- evaluate $ deep
                   $ runEval
                   $ parMp (matches searchTarget)
