@@ -1,29 +1,30 @@
--- ./KMPratt 400000  "/Users/OdeMoor/Documents/text2.txt" "l"  +RTS -K20M  -N2 -s -RTS
 -- ghc -O2 KMPratt.hs -rtsopts -threaded -eventlog
+-- ./KMPratt_lazy 5000000  "/Users/RBird/Downloads/LargeDataSet.txt" +RTS -K16M -H128m -N8 -s -RTS
 
-import Control.Exception
-import System.Environment
-import qualified Data.ByteString.Lazy as LB
-import qualified Data.ByteString as B
-import Data.Word
-import Control.Parallel.Strategies
-import Control.Monad.Par
-import Control.DeepSeq
 import Control.Applicative
-import Data.Int
+import Control.DeepSeq
+import Control.Exception
+import Control.Monad.Par           hiding (parMap)
+import Control.Parallel.Strategies hiding (parMap)
 import Data.ByteString.Search
+import Data.Int
+import Data.Word
+import System.Environment
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as LB
 
 main = do
-    ( chunkSizeString : sourceFile : flag : _ ) <- getArgs
+    ( chunkSizeString : sourceFile : _ ) <- getArgs
     let chunkSize = read chunkSizeString :: Int
     let tgt = B.pack [84,84,71,84,65,67,65,67,67,71,84,71,65,84,67,65]
     input <- LB.readFile sourceFile
-    b <- evaluate $ deep
-                  $ runEval
-                  $ parMp (indices tgt)
-                  $ (chunk chunkSize input)
-    --mapM_ print $ concat b
-    print $ scanl (\ (a1,a2) b1 -> (a1+1, fmap (+ (a1 * chunkSize)) b1 ) ) (0, []) b
+    result <- evaluate $ deep $ runEval
+                       $ parMap (indices tgt) (chunk chunkSize input)
+    print "Results as [(chunkNumber, [file_positions])]"
+    print $ filter ( \ (_,resultsList) -> not (null resultsList) )
+          $ scanl  ( \ (index, _) chunkResult  ->
+                       (index+1, fmap (+ (index * chunkSize)) chunkResult) )
+                       (0, []) result
 
 deep ::  NFData b => b -> b
 deep a = deepseq a a
@@ -33,15 +34,12 @@ chunk ::  Int -> LB.ByteString -> [B.ByteString]
 chunk chunkSize bstring =
     let sfbit = (fromInteger $ fromIntegral chunkSize) :: Int64 in
     if bstring == LB.empty then [] else
-    let (a, b) = LB.splitAt sfbit bstring
-    in  (LB.toStrict a) : chunk chunkSize b
+    let (first, rest) = LB.splitAt sfbit bstring
+    in  LB.toStrict first : chunk chunkSize rest
 
---searchTarget :: [Word8]
---searchTarget = [84,84,71,84,65,67,65,67,67,71,84,71,65,84,67,65]
-
-parMp ::  (t -> a) -> [t] -> Eval [a]
-parMp f [] = return []
-parMp f (a:as) = do
+parMap ::  (t -> a) -> [t] -> Eval [a]
+parMap f [] = return []
+parMap f (a:as) = do
     b  <- rpar(f a)
-    bs <- parMp f as
+    bs <- parMap f as
     return (b:bs)
