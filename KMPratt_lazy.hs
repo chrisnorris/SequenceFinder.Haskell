@@ -28,7 +28,6 @@ main = do
 
 deep ::  NFData b => b -> b
 deep a = deepseq a a
-data Rep a = Null | Node a (Rep a) (Rep a)
 
 chunk ::  Int -> LB.ByteString -> [B.ByteString]
 chunk chunkSize bstring =
